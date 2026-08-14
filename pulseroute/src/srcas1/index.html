@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseRoute // Hospital & Emergency Command</title>
+  <!-- Tailwind CSS & Chart.js for graphics -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #050811; color: #f3f4f6; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* GLOW EFFECTS */
+    .glow-red { box-shadow: 0 0 25px rgba(239, 68, 68, 0.45); }
+    .glow-green { box-shadow: 0 0 25px rgba(34, 197, 94, 0.45); }
+    .glow-cyan { box-shadow: 0 0 22px rgba(6, 182, 212, 0.4); }
+    
+    .bg-grid { 
+      background-image: radial-gradient(#1e293b 1px, transparent 1px); 
+      background-size: 24px 24px; 
+    }
+    
+    .tab-btn.active { 
+      border-bottom: 2px solid #06b6d4; 
+      color: #38bdf8; 
+      background-color: rgba(15, 23, 42, 0.9); 
+    }
+
+    /* ANIMATED ECG LINE */
+    @keyframes ecgPulse {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
+    .pulse-heart { animation: ecgPulse 1.2s infinite ease-in-out; }
+    
+    /* RADAR ANIMATION */
+    @keyframes radarSweep {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .radar-line {
+      transform-origin: center;
+      animation: radarSweep 4s linear infinite;
+    }
+  </style>
+</head>
+<body class="bg-grid min-h-screen p-3 md:p-6 text-gray-100 flex flex-col">
+
+  <!-- TOP HEADER -->
+  <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center pb-4 border-b border-gray-800 gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <span class="relative flex h-3.5 w-3.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-500"></span>
+        </span>
+        <h1 class="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+          PULSEROUTE <span class="text-cyan-400 font-mono text-xs tracking-wider px-2 py-0.5 rounded bg-cyan-950/90 border border-cyan-800">HOSPITAL-V2X COMMAND v4.0</span>
+        </h1>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">Central Hub: <span class="mono text-cyan-300">APOLLO TRAUMA CENTER</span></p>
+    </div>
+    
+    <!-- HEADER STATS & MAIN TRIGGER BUTTON -->
+    <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+      
+      <div class="px-3 py-1.5 rounded-lg bg-gray-900/90 border border-red-900/50 text-right">
+        <div class="text-[10px] uppercase text-gray-400 flex items-center justify-end gap-1">
+          <span class="w-2 h-2 rounded-full bg-red-500 pulse-heart"></span> Tele-ICU Vitals
+        </div>
+        <div class="text-xs font-bold text-red-400 mono flex items-center justify-end gap-2">
+          <span>BPM: <span id="headerBpm">84</span></span>
+          <span class="text-emerald-400">SpO2: <span id="headerSpo2">98%</span></span>
+        </div>
+      </div>
+
+      <div class="px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-right">
+        <div class="text-[10px] uppercase text-gray-400">Passes Today</div>
+        <div class="text-xs font-bold text-cyan-400 mono">
+          <span id="headerAmbCount">14</span> Vehicles
+        </div>
+      </div>
+
+      <button id="globalTriggerBtn" onclick="toggleGlobalEmergency()" class="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 font-bold text-xs tracking-wider uppercase transition-all glow-red flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        DISPATCH EMERGENCY BEACON
+      </button>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="flex overflow-x-auto border-b border-gray-800 mt-4 text-xs font-semibold text-gray-400 gap-1 scrollbar-none">
+    <button onclick="switchTab('tab-vitals')" id="btn-tab-vitals" class="tab-btn active px-4 py-3 rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+      <span>🩺</span> In-Transit Tele-ICU & ECG
+    </button>
+    <button onclick="switchTab('tab-er')" id="btn-tab-er" class="tab-btn px-4 py-3 rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+      <span>🏥</span> Hospital ER Bed Network
+    </button>
+    <button onclick="switchTab('tab-fleet')" id="btn-tab-fleet" class="tab-btn px-4 py-3 rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+      <span>🚑</span> Fleet Dispatch
+    </button>
+    <button onclick="switchTab('tab-live')" id="btn-tab-live" class="tab-btn px-4 py-3 rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+      <span>🛰️</span> Live Corridor Control
+    </button>
+    <button onclick="switchTab('tab-cctv')" id="btn-tab-cctv" class="tab-btn px-4 py-3 rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+      <span>🎥</span> CCTV Vision & Spotter
+    </button>
+  </nav>
+
+  <!-- TAB CONTENT -->
+  <main class="mt-6 flex-grow">
+
+    <!-- TAB 1: TELE-ICU & VITALS -->
+    <div id="tab-vitals" class="tab-content space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
+          <div class="text-xs text-gray-400 uppercase font-semibold flex justify-between">
+            <span>Heart Rate (ECG)</span>
+            <span class="text-red-400 pulse-heart">● LIVE</span>
+          </div>
+          <div class="flex items-baseline justify-between mt-2">
+            <span id="liveBpmText" class="text-3xl font-extrabold mono text-red-400">84</span>
+            <span class="text-xs text-gray-400">BPM (Normal)</span>
+          </div>
+          <div class="w-full bg-gray-800 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div id="bpmBar" class="bg-red-500 h-full w-[60%] transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
+          <div class="text-xs text-gray-400 uppercase font-semibold">Blood Oxygen (SpO2)</div>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-3xl font-extrabold mono text-emerald-400">98%</span>
+            <span class="text-xs text-emerald-400 font-bold">Optimal</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mt-2">Continuous O2 flow: 4 L/min</p>
+        </div>
+
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
+          <div class="text-xs text-gray-400 uppercase font-semibold">Blood Pressure</div>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-2xl font-bold mono text-cyan-400">122 / 80</span>
+            <span class="text-xs text-gray-400">mmHg</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mt-2">NIBP Auto-cycling</p>
+        </div>
+
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
+          <div class="text-xs text-gray-400 uppercase font-semibold">ETA To ER Bay 02</div>
+          <div class="flex items-baseline justify-between mt-2">
+            <span class="text-3xl font-extrabold mono text-yellow-400">03:42</span>
+            <span class="text-[10px] text-emerald-400">Corridor Clear</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mt-2">Speed: 64 km/h • Dist: 2.1 km</p>
+        </div>
+      </div>
+
+      <!-- ECG GRAPH & BUTTON -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-8 bg-gray-900/80 border border-gray-800 rounded-xl p-5 space-y-3">
+          <div class="flex justify-between items-center">
+            <div>
+              <h2 class="text-sm font-bold uppercase text-gray-200">Live ECG Waveform</h2>
+              <p class="text-xs text-gray-400">Vehicle: AMB-01 (Apollo Trauma Team)</p>
+            </div>
+            <button onclick="simulateArrythmia()" class="bg-red-950 hover:bg-red-900 border border-red-800 text-red-300 text-xs px-3 py-1.5 rounded font-bold transition-all">
+              ⚡ Simulate Tachycardia Spike
+            </button>
+          </div>
+
+          <div class="h-60 bg-gray-950 border border-gray-800 rounded-xl p-2 relative overflow-hidden">
+            <canvas id="ecgChart"></canvas>
+          </div>
+        </div>
+
+        <div class="lg:col-span-4 bg-gray-900/80 border border-gray-800 rounded-xl p-5 space-y-4">
+          <h2 class="text-sm font-bold uppercase text-gray-200">Hospital Doctor Link</h2>
+          <div class="bg-gray-950 border border-gray-800 rounded-lg p-3 space-y-2 text-xs mono">
+            <div class="flex items-center justify-between text-emerald-400">
+              <span>● VOICE LINK: ACTIVE</span>
+            </div>
+            <div class="text-gray-300">
+              <span class="text-cyan-400 font-bold">[PARAMEDIC]:</span> Patient stabilized. Administered 10mg IV saline.
+            </div>
+            <div class="text-gray-300">
+              <span class="text-yellow-400 font-bold">[ER DOCTOR]:</span> Corridor Green-lit. Trauma Bay #2 reserved.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ER BEDS & RADAR -->
+    <div id="tab-er" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-7 bg-gray-900/80 border border-gray-800 rounded-xl p-5 space-y-4">
+          <h2 class="text-sm font-bold uppercase text-gray-200">Nearby ER & Trauma Beds</h2>
+          <div class="space-y-3">
+            
+            <div class="bg-gray-950 border border-cyan-500/40 rounded-xl p-4 flex justify-between items-center glow-cyan">
+              <div>
+                <div class="text-sm font-bold text-white">Apollo Central Hospital</div>
+                <p class="text-xs text-gray-400">2.1 km away • Travel time: 3m 42s</p>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="text-xl font-bold text-emerald-400 mono">4 BEDS</div>
+                <button onclick="reserveBed('Apollo')" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs px-3 py-2 rounded font-bold">
+                  Pre-Reserve
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-gray-950 border border-gray-800 rounded-xl p-4 flex justify-between items-center">
+              <div>
+                <div class="text-sm font-bold text-white">Government General Hospital</div>
+                <p class="text-xs text-gray-400">4.8 km away • Travel time: 8m 15s</p>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="text-xl font-bold text-yellow-400 mono">1 BED</div>
+                <button onclick="reserveBed('Govt General')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-2 rounded font-bold">
+                  Select
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-gray-950 border border-gray-800 rounded-xl p-4 flex justify-between items-center opacity-60">
+              <div>
+                <div class="text-sm font-bold text-white">Fortis Healthcare</div>
+                <p class="text-xs text-gray-400">7.2 km away • Travel time: 14m 00s</p>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="text-xl font-bold text-red-400 mono">FULL</div>
+                <button disabled class="bg-gray-900 text-gray-600 text-xs px-3 py-2 rounded font-bold cursor-not-allowed">Full</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- PERIMETER RADAR -->
+        <div class="lg:col-span-5 bg-gray-900/80 border border-gray-800 rounded-xl p-5 flex flex-col justify-between">
+          <div>
+            <h2 class="text-sm font-bold uppercase text-gray-200 mb-4">Ambulance Distance Radar</h2>
+            <div class="relative w-48 h-48 mx-auto border-2 border-cyan-800 rounded-full flex items-center justify-center overflow-hidden bg-gray-950">
+              <div class="absolute inset-0 border border-cyan-900/40 rounded-full scale-75"></div>
+              <div class="absolute inset-0 border border-cyan-900/30 rounded-full scale-50"></div>
+              <div class="absolute inset-0 radar-line bg-gradient-to-tr from-cyan-500/20 to-transparent"></div>
+              <div class="absolute top-12 left-16 w-3 h-3 bg-red-500 rounded-full glow-red animate-ping"></div>
+              <div class="absolute top-12 left-16 w-3 h-3 bg-red-500 rounded-full"></div>
+              <div class="w-4 h-4 bg-cyan-400 rounded-sm flex items-center justify-center text-[8px] text-black font-bold">H</div>
+            </div>
+          </div>
+          <div class="mt-4 bg-gray-950 border border-gray-800 p-3 rounded-lg text-xs mono text-emerald-400 font-bold text-center">
+            ✓ ER Trauma Bay #02 Pre-heated & Ready
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: FLEET DISPATCH -->
+    <div id="tab-fleet" class="tab-content hidden space-y-6">
+      <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5">
+        <h2 class="text-sm font-bold uppercase text-gray-200 mb-4">Active Ambulance Fleet</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-gray-950 border border-red-500/50 rounded-xl p-4 space-y-3 glow-red">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-xs font-bold text-red-400 mono">AMB-01 (ICU UNIT)</span>
+                <div class="text-[10px] text-gray-400">Driver: R. Sharma</div>
+              </div>
+              <span class="bg-red-950 text-red-300 border border-red-800 text-[10px] px-2 py-0.5 rounded font-mono animate-pulse">DISPATCHED</span>
+            </div>
+            <div class="text-xs space-y-1 mono text-gray-300">
+              <div class="flex justify-between"><span>Speed:</span><span class="text-cyan-400">64 km/h</span></div>
+              <div class="flex justify-between"><span>Location:</span><span>Mount Road</span></div>
+            </div>
+          </div>
+
+          <div class="bg-gray-950 border border-gray-800 rounded-xl p-4 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-xs font-bold text-cyan-400 mono">AMB-02 (BASIC CARE)</span>
+                <div class="text-[10px] text-gray-400">Driver: K. Vijay</div>
+              </div>
+              <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] px-2 py-0.5 rounded font-mono">STANDBY</span>
+            </div>
+            <div class="text-xs space-y-1 mono text-gray-300">
+              <div class="flex justify-between"><span>Speed:</span><span>0 km/h</span></div>
+              <div class="flex justify-between"><span>Location:</span><span>North Station</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: LIVE CORRIDOR CONTROL -->
+    <div id="tab-live" class="tab-content hidden space-y-6">
+      <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5">
+        <h2 class="text-sm font-bold uppercase text-gray-200 mb-4">Traffic Signal Map</h2>
+        <div class="relative bg-gray-950 border border-gray-800 rounded-xl h-64 flex items-center justify-center overflow-hidden">
+          <div class="absolute inset-x-0 h-20 bg-gray-900 border-y border-gray-800"></div>
+          <div class="absolute inset-y-0 w-20 bg-gray-900 border-x border-gray-800"></div>
+          
+          <div id="junctionNode" class="absolute w-12 h-12 rounded-full bg-gray-800 border-2 border-gray-600 flex items-center justify-center z-10">
+            <span class="text-[10px] font-bold text-gray-300">J-084</span>
+          </div>
+
+          <div id="ambulanceIcon" class="absolute left-6 h-9 w-16 bg-red-600 rounded-md flex flex-col items-center justify-center text-white text-[9px] font-bold opacity-40 transition-all duration-700">
+            <span>🚑 AMB-01</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: CCTV VISION -->
+    <div id="tab-cctv" class="tab-content hidden space-y-6">
+      <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5 space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-bold uppercase text-gray-200">CCTV License Plate Spotter</h2>
+          <button onclick="triggerManualCctvPass()" class="bg-cyan-950 hover:bg-cyan-900 border border-cyan-700 text-cyan-300 text-xs px-3 py-1.5 rounded font-bold">
+            + Simulate Pass
+          </button>
+        </div>
+        <div class="relative bg-gray-950 border border-gray-800 rounded-xl h-64 flex items-center justify-center">
+          <div class="border-2 border-cyan-400 bg-cyan-950/30 rounded p-4 text-center glow-cyan">
+            <div class="text-xs mono font-bold text-cyan-300">SPOTTED: AMBULANCE #AMB-14</div>
+            <div class="text-xs mono text-emerald-400 mt-1">PLATE: TN-38-E-4012</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- DASHBOARD SCRIPT -->
+  <script>
+    let isEmergency = false;
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.remove('hidden');
+      document.getElementById('btn-' + tabId).classList.add('active');
+    }
+
+    // LIVE ECG CHART
+    const ctxEcg = document.getElementById('ecgChart').getContext('2d');
+    const ecgData = Array(50).fill(20);
+    const ecgChart = new Chart(ctxEcg, {
+      type: 'line',
+      data: {
+        labels: Array(50).fill(''),
+        datasets: [{
+          data: ecgData,
+          borderColor: '#ef4444',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { display: false }, y: { min: 0, max: 100, grid: { color: '#1e293b' } } }
+      }
+    });
+
+    let ecgTick = 0;
+    setInterval(() => {
+      ecgTick++;
+      let ecgVal = 20;
+      if (ecgTick % 10 === 0) ecgVal = 90; // Heartbeat Spike
+      else ecgVal = 20 + Math.random() * 5;
+
+      ecgData.shift();
+      ecgData.push(ecgVal);
+      ecgChart.update('none');
+    }, 120);
+
+    function simulateArrythmia() {
+      document.getElementById('liveBpmText').innerText = "142";
+      document.getElementById('headerBpm').innerText = "142";
+      document.getElementById('bpmBar').style.width = "95%";
+      alert("⚠️ Alert sent to ER doctors: Patient Heart Rate spiked to 142 BPM!");
+    }
+
+    function reserveBed(hospitalName) {
+      alert(`✅ ER Bay Pre-Reserved at ${hospitalName}! Routing priority locked.`);
+    }
+
+    function triggerManualCctvPass() {
+      let count = parseInt(document.getElementById('headerAmbCount').innerText) + 1;
+      document.getElementById('headerAmbCount').innerText = count;
+    }
+
+    function toggleGlobalEmergency() {
+      isEmergency = !isEmergency;
+      const btn = document.getElementById('globalTriggerBtn');
+      const node = document.getElementById('junctionNode');
+      const amb = document.getElementById('ambulanceIcon');
+
+      if (isEmergency) {
+        btn.innerText = "RESET CORRIDOR";
+        btn.classList.replace('bg-red-600', 'bg-gray-700');
+        node.className = "absolute w-14 h-14 rounded-full bg-red-600 border-4 border-white glow-red flex items-center justify-center z-10";
+        amb.style.left = "40%";
+        amb.style.opacity = "1";
+        triggerManualCctvPass();
+      } else {
+        btn.innerText = "DISPATCH EMERGENCY BEACON";
+        btn.classList.replace('bg-gray-700', 'bg-red-600');
+        node.className = "absolute w-12 h-12 rounded-full bg-gray-800 border-2 border-gray-600 flex items-center justify-center z-10";
+        amb.style.left = "1.5rem";
+        amb.style.opacity = "0.4";
+      }
+    }
+  </script>
+</body>
+</html>
