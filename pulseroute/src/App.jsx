@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import EmergencyLogs from './components/EmergencyLogs';
+import { getDatabase, ref, push, serverTimestamp } from "firebase/database";
+import { app } from "./firebase"; // This connects to your firebase.js file
+
+
+const db = getDatabase(app);
 
 export default function App() {
+  
   const [activeTab, setActiveTab] = useState('corridor');
   const [isEmergency, setIsEmergency] = useState(false);
   const [selectedAmb, setSelectedAmb] = useState('AMB-01');
@@ -637,6 +643,34 @@ export default function App() {
     <span className="text-[10px] bg-cyan-900 text-cyan-100 px-2 py-0.5 rounded font-mono">Active (EXT)</span>
   </div>
 )}
+{/* TAB: TRAFFIC CAMERAS (CCTV VISION STREAM) */}
+        {activeTab === 'cctv' && (
+          <div className="space-y-6">
+            <div className="glass-panel rounded-2xl p-5 space-y-4 border border-cyan-500/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                  <h2 className="text-xs font-bold uppercase text-cyan-300 font-mono tracking-wider">Live Cam-01 (Phone CCTV Stream)</h2>
+                </div>
+                <span className="text-[10px] font-mono bg-red-500/10 text-red-400 px-2.5 py-0.5 rounded border border-red-500/20">EDGE NODE ACTIVE</span>
+              </div>
+
+              {/* Direct Raw Video Stream Container */}
+              <div className="w-full bg-black rounded-xl overflow-hidden border border-gray-800 h-[320px] flex items-center justify-center relative">
+                <img 
+                  src="http://10.233.246.112:8080/videofeed" 
+                  alt="IP Webcam Direct Stream" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="flex justify-between text-xs font-mono text-gray-400 px-1">
+                <span>AI Detection: Emergency Vehicle (98.4%)</span>
+                <span className="text-emerald-400">FPS: 30 • 1080p</span>
+              </div>
+            </div>
+          </div>
+        )}
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-xl font-bold text-emerald-400 font-mono">4 ICU BEDS</div>
@@ -645,6 +679,8 @@ export default function App() {
   className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">
   {allocatedBed ? `Reserved: ${allocatedBed}` : 'Pre-Reserve Bay'}
 </button>
+
+
 {/* --- BED SELECTION POPUP MODAL --- */}
       {showBedModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
